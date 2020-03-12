@@ -1,0 +1,80 @@
+import pandas as pd
+import numpy as np
+import tweepy
+from tweepy import OAuthHandler
+from textblob import TextBlob
+import datetime
+from dateutil.parser import parse
+from collections import Counter
+import pickle
+import re
+
+#keys and tokens from the Twitter Dev Console 
+consumer_key =  'consumer_key'
+consumer_secret = 'consumer_secret'
+access_token = 'access_token'
+access_token_secret = 'access_token_secret'
+# create OAuthHandler object
+auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+# set access token and secret 
+auth.set_access_token(access_token, access_token_secret)
+# create tweepy API object to fetch tweets
+api = tweepy.API(auth)
+
+def preprocess_tweet(tweet):
+    #Preprocess the text in a single tweet
+    #arguments: tweet = a single tweet in form of string 
+    #handling emojis 
+    tweet = emoji.demojize(tweet)
+    tweet = tweet.replace(":"," ")
+    #convert the tweet to lower case
+    tweet = tweet.lower()
+    #convert all urls to sting "URL"
+    tweet = re.sub('((www\.[^\s]+)|(https?://[^\s]+))','URL',tweet)
+    #convert all @username to "AT_USER"
+    tweet = re.sub('@[^\s]+','AT_USER', tweet)
+    #correct all multiple white spaces to a single white space
+    tweet = re.sub('[\s]+', ' ', tweet)
+    #convert "#topic" to just "topic"
+    tweet = re.sub(r'#([^\s]+)', r'\1', tweet)
+    return tweet
+    
+    
+def get_tweet_sentiment(tweet): 
+    ''' tweet
+    Utility function to classify sentiment of passed tweet 
+    using textblob's sentiment method 
+    '''
+    # create TextBlob object of passed tweet text 
+    analysis = TextBlob(preprocess_tweet(tweet)) 
+    # set sentiment 
+    if analysis.sentiment.polarity > 0: 
+        return 'Positive'
+    elif analysis.sentiment.polarity == 0: 
+        return 'Nuetral'
+    else: 
+        return 'Negative'
+
+Search = ['infy','infosys']
+
+dates = pd.date_range(start='2/25/2020',end='3/3/2020',freq='D')  # creating Date range to iterate datewise tweets
+
+# fetching tweets of all dates 
+All_tweets = []
+for date in dates:
+    fetched_tweets = api.search(q = Search, count = 200 ,until = date.date()) 
+    All_tweets.append(fetched_tweets)
+
+new_sent = {}
+sentiment = {}
+
+for fetched_tweets in All_tweets: # fetching single tweets 
+    for date in dates:
+        date_sentiment = []
+        for tweet in fetched_tweets: 
+            if tweet.created_at.strftime('%Y-%m-%d') == str(date.date()):
+                date_sentiment.append(get_tweet_sentiment(tweet.text))  # appending all tweets by date
+                new_sent[date.date().strftime('%Y-%m-%d')] = Counter(date_sentiment).most_common(1) # taking mode of all tweets sentiments
+                
+Tweet_sentiment = pd.DataFrame(new_sent).transpose()
+print(Tweet_sentiment)
